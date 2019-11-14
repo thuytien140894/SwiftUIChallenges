@@ -8,38 +8,61 @@
 
 import SwiftUI
 
-struct Activity: Identifiable {
+struct Activity: Codable, Identifiable {
     let id = UUID()
     let title: String
     let description: String
-    let completionCount: Int
+    var completionCount = 0
 }
 
 class ActivityList: ObservableObject {
-    @Published var items: [Activity] = []
+    
+    @Published var items: [Activity] = [] {
+        didSet {
+            let encoder = JSONEncoder()
+            if let encodedItems = try? encoder.encode(items) {
+                UserDefaults.standard.set(encodedItems, forKey: "Activities")
+            }
+        }
+    }
+    
+    init() {
+        
+        guard let encodedItems = UserDefaults.standard.data(forKey: "Activities") else { return }
+        
+        let decoder = JSONDecoder()
+        if let decodedItems = try? decoder.decode([Activity].self, from: encodedItems) {
+            items = decodedItems
+        }
+    }
 }
 
 struct ContentView: View {
     
     @ObservedObject private var activityList = ActivityList()
+    @State private var showAddHabit = false
     
     var body: some View {
         NavigationView {
             List {
-                ForEach(activityList.items) {
-                    Text($0.title)
+                ForEach(0..<activityList.items.count, id: \.self) { index in
+                    NavigationLink(destination: HabitDetailView(activityList: self.activityList, activityIndex: index)) {
+                        Text(self.activityList.items[index].title)
+                    }
                 }
                 .onDelete(perform: removeActivities)
             }
             .navigationBarTitle("Habit Tracker")
             .navigationBarItems(trailing:
                 Button(action: {
-                    let activity = Activity(title: "A", description: "B", completionCount: 0)
-                    self.activityList.items.append(activity)
+                    self.showAddHabit = true
                 }) {
                     Image(systemName: "plus")
                 }
             )
+        }
+        .sheet(isPresented: $showAddHabit) {
+            AddHabitView(activityList: self.activityList)
         }
     }
     
